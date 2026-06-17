@@ -9,13 +9,15 @@
     .container { max-width: 1000px; margin: auto; padding: 20px; }
     .grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
     .card { background: #111827; border-radius: 14px; padding: 18px; border: 1px solid #334155; }
-    input, select, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 0; }
+    input, select, button { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 0; box-sizing: border-box; }
     button { background: #38bdf8; color: #082f49; font-weight: bold; cursor: pointer; }
     ul { list-style: none; padding: 0; }
     li { padding: 8px; border-bottom: 1px solid #334155; }
     .msg { background: #1e293b; margin: 8px 0; padding: 10px; border-radius: 10px; }
     .system { color: #facc15; font-style: italic; }
     .private { border-left: 4px solid #f472b6; }
+    .badge-sala { background: #10b981; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; margin-left: 8px; text-transform: uppercase;}
+    #salaActiva { color: #38bdf8; font-weight: bold; text-transform: uppercase;}
   </style>
 </head>
 <body>
@@ -26,22 +28,28 @@
     <div class="card" id="registro">
       <h2>Registro</h2>
       <input id="nombre" placeholder="Escribe tu nombre" />
+      <label for="sala">Selecciona una sala:</label>
+      <select id="sala">
+        <option value="general">General</option>
+        <option value="soporte">Soporte</option>
+        <option value="juegos">Juegos</option>
+      </select>
       <button onclick="registrar()">Entrar al chat</button>
     </div>
 
     <div class="grid" id="chat" style="display:none">
       <div class="card">
-        <h2>Usuarios conectados</h2>
+        <h2>Usuarios en esta sala</h2>
         <ul id="usuarios"></ul>
       </div>
 
       <div class="card">
-        <h2>Mensajes</h2>
-        <div id="mensajes"></div>
+        <h2>Mensajes (<span id="salaActiva"></span>)</h2>
+        <div id="mensajes" style="max-height: 300px; overflow-y: auto; margin-bottom: 10px;"></div>
 
-        <h3>Mensaje global</h3>
-        <input id="mensaje" placeholder="Escribe un mensaje para todos" />
-        <button onclick="enviarGlobal()">Enviar a todos</button>
+        <h3>Mensaje de Sala</h3>
+        <input id="mensaje" placeholder="Escribe un mensaje para la sala" />
+        <button onclick="enviarSala()">Enviar a la sala</button>
 
         <h3>Mensaje privado</h3>
         <select id="destino"></select>
@@ -55,25 +63,31 @@
   <script>
     const socket = io();
     let miNombre = "";
+    let miSala = "";
 
     function registrar() {
       miNombre = document.getElementById("nombre").value.trim();
+      miSala = document.getElementById("sala").value;
+
       if (!miNombre) {
         alert("Escribe tu nombre");
         return;
       }
 
-      socket.emit("registrarUsuario", miNombre);
+      socket.emit("registrarUsuario", { nombre: miNombre, sala: miSala });
+      
+      document.getElementById("salaActiva").textContent = miSala;
+
       document.getElementById("registro").style.display = "none";
       document.getElementById("chat").style.display = "grid";
     }
 
-    function enviarGlobal() {
+    function enviarSala() {
       const input = document.getElementById("mensaje");
       const mensaje = input.value.trim();
       if (!mensaje) return;
 
-      socket.emit("mensajeGlobal", {
+      socket.emit("mensajeSala", {
         usuario: miNombre,
         mensaje
       });
@@ -105,7 +119,7 @@
 
       usuarios.forEach((usuario) => {
         const li = document.createElement("li");
-        li.textContent = `${usuario.nombre} (${usuario.id})`;
+        li.innerHTML = `${usuario.nombre} <span class="badge-sala">${usuario.sala}</span>`;
         lista.appendChild(li);
 
         if (usuario.nombre !== miNombre) {
@@ -117,7 +131,7 @@
       });
     });
 
-    socket.on("mensajeGlobal", (data) => {
+    socket.on("mensajeSala", (data) => {
       agregarMensaje(`${data.hora} - ${data.usuario}: ${data.mensaje}`);
     });
 
@@ -133,7 +147,8 @@
       const div = document.createElement("div");
       div.className = `msg ${clase}`;
       div.textContent = texto;
-      document.getElementById("mensajes").appendChild(div);
+      const contenedor = document.getElementById("mensajes");
+      contenedor.appendChild(div);
       div.scrollIntoView();
     }
   </script>

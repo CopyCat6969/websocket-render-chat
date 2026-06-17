@@ -17,27 +17,38 @@ app.get("/health", (req, res) => {
   res.json({ ok: true, message: "Servidor funcionando" });
 });
 
+function obtenerUsuariosPorSala(sala) {
+  return Array.from(usuarios.values()).filter(u => u.sala === sala);
+}
+
 io.on("connection", (socket) => {
   console.log("Usuario conectado:", socket.id);
 
-  socket.on("registrarUsuario", (nombre) => {
+  socket.on("registrarUsuario", (data) => {
+    const salaAsignada = data.sala || "general";
+    
     const usuario = {
       id: socket.id,
-      nombre: nombre || "Anónimo"
+      nombre: data.nombre || "Anónimo",
+      sala: salaAsignada
     };
 
     usuarios.set(socket.id, usuario);
+    socket.join(salaAsignada);
 
-    io.emit("usuariosActualizados", Array.from(usuarios.values()));
-    io.emit("mensajeSistema", `${usuario.nombre} se conectó`);
+    io.to(salaAsignada).emit("usuariosActualizados", obtenerUsuariosPorSala(salaAsignada));
+    io.to(salaAsignada).emit("mensajeSistema", `${usuario.nombre} se conectó a la sala ${salaAsignada.toUpperCase()}`);
   });
 
-  socket.on("mensajeGlobal", (data) => {
-    io.emit("mensajeGlobal", {
-      usuario: data.usuario,
-      mensaje: data.mensaje,
-      hora: new Date().toLocaleTimeString()
-    });
+  socket.on("mensajeSala", (data) => {
+    const usuario = usuarios.get(socket.id);
+    if (usuario) {
+      io.to(usuario.sala).emit("mensajeSala", {
+        usuario: data.usuario,
+        mensaje: data.mensaje,
+        hora: new Date().toLocaleTimeString()
+      });
+    }
   });
 
   socket.on("mensajePrivado", (data) => {
@@ -52,10 +63,9 @@ io.on("connection", (socket) => {
     const usuario = usuarios.get(socket.id);
     usuarios.delete(socket.id);
 
-    io.emit("usuariosActualizados", Array.from(usuarios.values()));
-
     if (usuario) {
-      io.emit("mensajeSistema", `${usuario.nombre} se desconectó`);
+      io.to(usuario.sala).emit("usuariosActualizados", obtenerUsuariosPorSala(usuario.sala));
+      io.to(usuario.sala).emit("mensajeSistema", `${usuario.nombre} se desconectó`);
     }
 
     console.log("Usuario desconectado:", socket.id);
